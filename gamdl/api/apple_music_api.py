@@ -337,10 +337,22 @@ class AppleMusicApi:
         limit: int = 100,
     ) -> list[dict]:
         songs: list[dict] = []
-        next_url = f"/v1/me/library/songs?limit={limit}"
+        next_url = "/v1/me/library/songs"
+        params = {"limit": limit}
 
         while next_url:
-            response = await self.client.get(f"{AMP_API_URL}{next_url}",params=None)
+            parsed = urlparse(next_url)
+            path = parsed.path
+            query_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+
+            # Merge initial limit if query is empty (first request)
+            final_params = query_params if query_params else {"limit": limit}
+
+            response = await self.client.get(
+                f"{AMP_API_URL}{path}",
+                params=final_params,
+            )
+            logger.debug(f"Fetched URL: {response.url}")
             raise_for_status(response)
 
             library_page = safe_json(response)
@@ -349,11 +361,12 @@ class AppleMusicApi:
                 raise Exception("Error getting library songs:", response.text)
 
             songs.extend(library_page["data"])
+
             next_url = library_page.get("next")
 
         logger.debug(f"Library songs fetched: {len(songs)}")
-
         return songs
+
 
     async def get_search_results(
         self,
